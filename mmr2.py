@@ -4,9 +4,9 @@ import matplotlib.dates as mdates
 import sys
 from datetime import datetime
 
-#####################  Input here ####################################
+#####################  Default input here ####################################
 
-ofInterest = [
+default_players = [
     ('me', '215090022'),       # https://www.twitch.tv/klapdota
     ('topson', '94054712'),
     ('miracle', '105248644'),
@@ -14,21 +14,61 @@ ofInterest = [
     ('matu', '72312627'),
 ]
 
-######################################################################
+##############################################################################
 
-'''
-ofInterest = [
-    ('topson', '94054712'),
-    ('miracle', '105248644'),
-    ('rtz', '242629424'),
-    ('matu', '72312627'),
-    ('GH', '101356886'),
-    ('midone', '116585378'),
-]
-'''
+start_date = '2013.01.01'
+end_date = '9999.99.99' #elegant hack
+
+start_key = 'start'
+end_key = 'end'
+usemmr_key = 'usemmr'
+
+def readme():
+    print('How to use:')
+    print('> py mmr2.py [args]')
+    print('    where [args] is a list of either:')
+    print('      1. "[name]:[id]"        -- where [name] is a nickname, and [id] is the player ID (e.g. "klap:215090022")')
+    print('      2. "default"            -- adds a bunch of defualt players')
+    print('      3. "help"               -- displays this menu')
+    print('      4. "{}:[YYYY.MM.DD]" -- sets the start of the time interval ({} by default)'.format(start_key, start_date))
+    print('      5. "{}:[YYYY.MM.DD]"   -- sets the end of the time interval (present day by default)'.format(end_key))
+    print('      6. "{}:[mmr]"       -- labels the mmr on the plot instead of the number of wins;'.format(usemmr_key))
+    print('                                 [mmr] is the current mmr of the player; currently only supported for single-players graphs')
+
+if 'help' in sys.argv or len(sys.argv) < 2:
+    readme()
+    exit()
+
+def badArgument():
+    print('Bad argument, see help: {}'.format(arg))
+    exit()
+
+ofInterest = []
+mmrscale = None
+
+for arg in sys.argv[1:]:
+    if arg == 'default':
+        ofInterest.extend(default_players)
+    elif arg == 'help':
+        readme()
+    else:
+        toks = arg.split(':')
+        if len(toks) != 2:
+            badArgument()
+        [k,v] = toks
+        if k == start_key:
+            start_date = v
+        elif k == end_key:
+            end_date = v
+        elif k == usemmr_key:
+            try:
+                mmrscale = int(v)
+            except:
+                badArgument()
+        else:
+            ofInterest.append((k, v))
 
 lobby_type_ranked = 7
-account_id = ''
 
 queries = {'limit': 10000, 'lobby_type': 7} #lobby type 7 = ranked
 
@@ -38,7 +78,8 @@ def getData(playerID):
     games = []
     for matches in data:
         dat = datetime.utcfromtimestamp(int(matches['start_time']))
-        if dat.year < 2013: continue
+        datstring = dat.strftime('%Y.%m.%d')
+        if datstring < start_date or datstring > end_date: continue
         delta = None
         if matches['radiant_win'] == True and matches['player_slot'] <=127: delta = 1
         elif matches['radiant_win'] == False and matches['player_slot'] >127: delta = 1
@@ -49,6 +90,9 @@ def getData(playerID):
     for idx in range(len(games)):
         cur += games[idx][1]
         games[idx] = games[idx][0], cur
+    if mmrscale is not None and len(games) > 0:
+        for idx in range(len(games)):
+            games[idx] = games[idx][0], mmrscale + 25 * (games[idx][1] - games[-1][1])
     return games
 
 plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%Y'))
